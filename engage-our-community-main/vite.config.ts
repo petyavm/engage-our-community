@@ -33,7 +33,6 @@ export default defineConfig(({ mode }) => ({
         }),
         commonjs(),
       ],
-      external: ['@supabase/supabase-js'],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom'],
