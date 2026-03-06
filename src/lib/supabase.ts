@@ -48,6 +48,7 @@ export type Document = {
   url: string;
   category?: string;
   date?: string;
+  links?: { label: string; url: string }[];
   created_at?: string;
 };
 

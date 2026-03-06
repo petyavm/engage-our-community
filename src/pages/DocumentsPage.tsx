@@ -72,23 +72,41 @@ const DocumentsPage = () => {
             )}
             {!loading && visible.length > 0 && (
               <div className="space-y-3">
-                {visible.map(doc => (
-                  <a key={doc.id} href={doc.url || "#"} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-4 rounded-xl border bg-card p-4 transition-shadow hover:shadow-md group">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <FileText className="h-5 w-5 text-primary" />
+                {visible.map(doc => {
+                  const links = doc.links && doc.links.length > 0 ? doc.links : null;
+                  return (
+                    <div key={doc.id} className="rounded-xl border bg-card p-4 transition-shadow hover:shadow-md">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                          <FileText className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">{doc.title}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {doc.category && activeTab === "Всички" && <span className="mr-2 rounded-full bg-accent px-2 py-0.5 text-xs">{doc.category}</span>}
+                            {doc.date && <span className="mr-2">{formatDate(doc.date)}</span>}
+                            {!links && <span>{doc.type}{doc.size ? ` · ${doc.size}` : ""}</span>}
+                          </p>
+                        </div>
+                        {!links && (
+                          <a href={doc.url || "#"} target="_blank" rel="noopener noreferrer">
+                            <Download className="h-4 w-4 text-muted-foreground hover:text-primary transition-colors" />
+                          </a>
+                        )}
+                      </div>
+                      {links && (
+                        <div className="mt-3 ml-15 flex flex-wrap gap-2 pl-[60px]">
+                          {links.map((link, i) => (
+                            <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg border bg-accent px-3 py-1.5 text-xs font-medium hover:bg-primary hover:text-primary-foreground hover:border-primary transition-colors">
+                              <Download className="h-3 w-3" />{link.label}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm group-hover:text-primary transition-colors">{doc.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {doc.category && activeTab === "Всички" && <span className="mr-2 rounded-full bg-accent px-2 py-0.5 text-xs">{doc.category}</span>}
-                        {doc.date && <span className="mr-2">{formatDate(doc.date)}</span>}
-                        {doc.type} · {doc.size}
-                      </p>
-                    </div>
-                    <Download className="h-4 w-4 text-muted-foreground shrink-0 group-hover:text-primary transition-colors" />
-                  </a>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
