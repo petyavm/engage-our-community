@@ -5,7 +5,7 @@ import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import { FileText, Download } from "lucide-react";
 
-const DOC_CATEGORIES = ["Всички", "Годишни финансови отчети", "Протоколи от ОС", "Протоколи от УС", "Други"];
+const DOC_CATEGORIES = ["Всички", "Основни", "Годишни финансови отчети", "Протоколи от ОС", "Протоколи от УС", "Други"];
 
 const formatDate = (d?: string) => {
   if (!d) return "";

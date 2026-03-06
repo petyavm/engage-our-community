@@ -357,8 +357,8 @@ const BoardTab = () => {
 };
 
 // ── DOCUMENTS ────────────────────────────────────────────────
-const DOC_CATEGORIES = ["Годишни финансови отчети", "Протоколи от ОС", "Протоколи от УС", "Други"];
-const emptyDoc = { title: "", type: "PDF", size: "", url: "", category: "Годишни финансови отчети", date: "" };
+const DOC_CATEGORIES = ["Основни", "Годишни финансови отчети", "Протоколи от ОС", "Протоколи от УС", "Други"];
+const emptyDoc = { title: "", type: "PDF", size: "", url: "", category: "Основни", date: "" };
 
 const sanitizeFileName = (name: string) =>
   name
