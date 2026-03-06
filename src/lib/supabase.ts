@@ -63,6 +63,20 @@ export type GalleryImage = {
   id: string;
   url: string;
   alt: string;
+  caption?: string;
+  sort_order: number;
+  album_id?: string;
+  created_at?: string;
+};
+
+export type GalleryAlbum = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  seo_title?: string;
+  seo_description?: string;
+  cover_url?: string;
   sort_order: number;
   created_at?: string;
 };

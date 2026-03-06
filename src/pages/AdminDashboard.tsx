@@ -3,13 +3,13 @@ import { useAuth } from "@/lib/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import type {
-  Announcement, NewsItem, BoardMember, Document, ImpactStat, GalleryImage, DonationInfo, BoardHistory, SiteSetting
+  Announcement, NewsItem, BoardMember, Document, ImpactStat, GalleryImage, GalleryAlbum, DonationInfo, BoardHistory, SiteSetting
 } from "@/lib/supabase";
 import {
-  LogOut, Megaphone, Newspaper, Users, FileText, BarChart2, Image, Heart, Trash2, Plus, Save, X, ChevronDown, ChevronUp, Home, Upload, Clock, Link as LinkIcon
+  LogOut, Megaphone, Newspaper, Users, FileText, BarChart2, Image, Heart, Trash2, Plus, Save, X, ChevronDown, ChevronUp, Home, Upload, Clock, Link as LinkIcon, FolderOpen, Copy, Check
 } from "lucide-react";
 
-type Section = "announcements" | "news" | "board" | "board_history" | "documents" | "stats" | "gallery" | "donation" | "settings";
+type Section = "announcements" | "news" | "board" | "board_history" | "documents" | "files" | "stats" | "gallery" | "donation" | "settings";
 
 // ── Generic helpers ──────────────────────────────────────────
 const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
@@ -528,11 +528,10 @@ const DocumentsTab = () => {
           <Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
         </div>
 
-        {/* File upload */}
-        {!editId && (
-          <div className="rounded-lg border-2 border-dashed border-border p-5 text-center">
+        {/* File upload — works for both new and edit */}
+        <div className="rounded-lg border-2 border-dashed border-border p-5 text-center">
             <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
-            <p className="mb-3 text-sm text-muted-foreground">Качете PDF или друг документ директно</p>
+            <p className="mb-3 text-sm text-muted-foreground">{editId ? "Качете нов файл за да замените текущия" : "Качете PDF или друг документ директно"}</p>
             <label className="cursor-pointer inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
               <Upload className="h-4 w-4" />
               {uploading ? "Качване..." : "Избери файл"}
@@ -540,7 +539,6 @@ const DocumentsTab = () => {
             </label>
             {uploadProgress && <p className={`mt-2 text-xs ${uploadProgress.startsWith("✓") ? "text-green-600" : "text-red-500"}`}>{uploadProgress}</p>}
           </div>
-        )}
 
         <div className="relative flex items-center gap-2 text-xs text-muted-foreground">
           <div className="flex-1 border-t" /><span>или въведете ръчно</span><div className="flex-1 border-t" />
@@ -635,57 +633,302 @@ const StatsTab = () => {
   );
 };
 
-// ── GALLERY ──────────────────────────────────────────────────
-const emptyImg = { url: "", alt: "", sort_order: 0 };
-
+// ── GALLERY (Albums + Photos) ─────────────────────────────────
 const GalleryTab = () => {
-  const [items, setItems] = useState<GalleryImage[]>([]);
-  const [form, setForm] = useState(emptyImg);
+  const [albums, setAlbums] = useState<GalleryAlbum[]>([]);
+  const [openAlbum, setOpenAlbum] = useState<GalleryAlbum | null>(null);
+  const [photos, setPhotos] = useState<GalleryImage[]>([]);
+  const [showAlbumForm, setShowAlbumForm] = useState(false);
+  const [albumForm, setAlbumForm] = useState({ name: "", slug: "", description: "", seo_title: "", seo_description: "", sort_order: 0 });
+  const [editAlbumId, setEditAlbumId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const load = () => supabase.from("gallery").select("*").order("sort_order")
-    .then(({ data }) => { if (data) setItems(data); });
+  const loadAlbums = () => supabase.from("gallery_albums").select("*").order("sort_order")
+    .then(({ data }) => { if (data) setAlbums(data as GalleryAlbum[]); });
 
-  useEffect(() => { load(); }, []);
+  const loadPhotos = (albumId: string) => supabase.from("gallery").select("*").eq("album_id", albumId).order("sort_order")
+    .then(({ data }) => { if (data) setPhotos(data); });
 
-  const add = async () => {
-    if (!form.url) return;
+  useEffect(() => { loadAlbums(); }, []);
+  useEffect(() => { if (openAlbum) loadPhotos(openAlbum.id); }, [openAlbum]);
+
+  const slugify = (s: string) => s.toLowerCase().replace(/[а-яА-Я]/g, c =>
+    ({ а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"h",ц:"ts",ч:"ch",ш:"sh",щ:"sht",ъ:"a",ю:"yu",я:"ya" }[c] ?? c)
+  ).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+  const saveAlbum = async () => {
     setSaving(true);
-    await supabase.from("gallery").insert([form]);
-    setForm(emptyImg);
+    const data = { ...albumForm, slug: albumForm.slug || slugify(albumForm.name) };
+    if (editAlbumId) {
+      await supabase.from("gallery_albums").update(data).eq("id", editAlbumId);
+    } else {
+      await supabase.from("gallery_albums").insert([data]);
+    }
     setSaving(false);
-    load();
+    setShowAlbumForm(false);
+    setEditAlbumId(null);
+    setAlbumForm({ name: "", slug: "", description: "", seo_title: "", seo_description: "", sort_order: 0 });
+    loadAlbums();
   };
 
-  const del = async (id: string) => {
-    if (!confirm("Изтриване?")) return;
+  const editAlbum = (a: GalleryAlbum) => {
+    setAlbumForm({ name: a.name, slug: a.slug, description: a.description || "", seo_title: a.seo_title || "", seo_description: a.seo_description || "", sort_order: a.sort_order });
+    setEditAlbumId(a.id);
+    setShowAlbumForm(true);
+  };
+
+  const deleteAlbum = async (id: string) => {
+    if (!confirm("Изтриване на албума и всички снимки в него?")) return;
+    await supabase.from("gallery").delete().eq("album_id", id);
+    await supabase.from("gallery_albums").delete().eq("id", id);
+    loadAlbums();
+  };
+
+  const uploadPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!openAlbum) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploading(true);
+    setUploadMsg(`Качване на ${files.length} снимки...`);
+    let done = 0;
+    for (const file of files) {
+      const name = `gallery/${openAlbum.id}/${Date.now()}-${sanitizeFileName(file.name)}`;
+      const { data, error } = await supabase.storage.from("documents").upload(name, file, { upsert: false });
+      if (!error && data) {
+        const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(data.path);
+        await supabase.from("gallery").insert([{ url: publicUrl, alt: file.name.replace(/\.[^/.]+$/, ""), caption: "", sort_order: done, album_id: openAlbum.id }]);
+      }
+      done++;
+      setUploadMsg(`Качване ${done}/${files.length}...`);
+    }
+    setUploadMsg(`✓ ${done} снимки качени!`);
+    setUploading(false);
+    loadPhotos(openAlbum.id);
+  };
+
+  const updatePhoto = async (id: string, alt: string, caption: string) => {
+    await supabase.from("gallery").update({ alt, caption }).eq("id", id);
+    if (openAlbum) loadPhotos(openAlbum.id);
+  };
+
+  const deletePhoto = async (id: string) => {
+    if (!confirm("Изтриване на снимката?")) return;
     await supabase.from("gallery").delete().eq("id", id);
-    load();
+    if (openAlbum) loadPhotos(openAlbum.id);
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="rounded-xl border bg-card p-5 space-y-3">
-        <h3 className="font-semibold">Добави снимка</h3>
-        <Input placeholder="URL на снимката" value={form.url} onChange={e => setForm({ ...form, url: e.target.value })} />
-        <Input placeholder="Описание (alt текст)" value={form.alt} onChange={e => setForm({ ...form, alt: e.target.value })} />
-        <Input type="number" placeholder="Ред (за наредба)" value={form.sort_order} onChange={e => setForm({ ...form, sort_order: +e.target.value })} />
-        <Btn onClick={add} disabled={saving}><Plus className="h-4 w-4" />{saving ? "Добавяне..." : "Добави"}</Btn>
+  // Photo edit inline state
+  const [editingPhoto, setEditingPhoto] = useState<string | null>(null);
+  const [photoAlt, setPhotoAlt] = useState("");
+  const [photoCaption, setPhotoCaption] = useState("");
+
+  if (openAlbum) return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={() => { setOpenAlbum(null); setPhotos([]); }} className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1">← Назад към албумите</button>
+        <h2 className="font-bold text-lg">{openAlbum.name}</h2>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-        {items.map(item => (
-          <div key={item.id} className="relative group rounded-xl overflow-hidden border">
-            <img src={item.url} alt={item.alt} className="aspect-square w-full object-cover" />
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-              <Btn variant="danger" onClick={() => del(item.id)}><Trash2 className="h-4 w-4" />Изтрий</Btn>
-            </div>
-            <div className="p-2">
-              <p className="text-xs text-muted-foreground truncate">{item.alt}</p>
+      {/* Upload */}
+      <div className="rounded-xl border bg-card p-4">
+        <label className={`inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground cursor-pointer hover:bg-primary/90 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+          <Upload className="h-4 w-4" />{uploading ? uploadMsg : "Качи снимки"}
+          <input type="file" accept="image/*" multiple className="hidden" onChange={uploadPhotos} disabled={uploading} />
+        </label>
+        {uploadMsg && <p className={`mt-2 text-xs ${uploadMsg.startsWith("✓") ? "text-green-600" : "text-muted-foreground"}`}>{uploadMsg}</p>}
+      </div>
+
+      {/* Photo grid */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {photos.map(photo => (
+          <div key={photo.id} className="rounded-xl border bg-card overflow-hidden">
+            <img src={photo.url} alt={photo.alt} className="aspect-video w-full object-cover" />
+            {editingPhoto === photo.id ? (
+              <div className="p-3 space-y-2">
+                <div><label className="text-xs text-muted-foreground block mb-1">Име (alt)</label>
+                  <Input value={photoAlt} onChange={e => setPhotoAlt(e.target.value)} /></div>
+                <div><label className="text-xs text-muted-foreground block mb-1">Надпис</label>
+                  <Input value={photoCaption} onChange={e => setPhotoCaption(e.target.value)} /></div>
+                <div className="flex gap-2">
+                  <Btn onClick={() => { updatePhoto(photo.id, photoAlt, photoCaption); setEditingPhoto(null); }}><Save className="h-3 w-3" />Запази</Btn>
+                  <Btn onClick={() => setEditingPhoto(null)} className="bg-secondary text-foreground hover:bg-secondary/80"><X className="h-3 w-3" />Отказ</Btn>
+                </div>
+              </div>
+            ) : (
+              <div className="p-2 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium truncate">{photo.alt || "—"}</p>
+                  {photo.caption && <p className="text-xs text-muted-foreground truncate">{photo.caption}</p>}
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button onClick={() => { setEditingPhoto(photo.id); setPhotoAlt(photo.alt); setPhotoCaption(photo.caption || ""); }}
+                    className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-primary"><Save className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => deletePhoto(photo.id)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+        {photos.length === 0 && <p className="col-span-3 text-sm text-muted-foreground py-8 text-center">Няма снимки в този албум. Качете снимки от бутона по-горе.</p>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Управлявайте фотоалбумите на сайта.</p>
+        <Btn onClick={() => { setShowAlbumForm(!showAlbumForm); setEditAlbumId(null); setAlbumForm({ name: "", slug: "", description: "", seo_title: "", seo_description: "", sort_order: 0 }); }}>
+          <Plus className="h-4 w-4" />Нов албум
+        </Btn>
+      </div>
+
+      {showAlbumForm && (
+        <div className="rounded-xl border bg-card p-5 space-y-3">
+          <h3 className="font-semibold">{editAlbumId ? "Редактиране на албум" : "Нов албум"}</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div><label className="text-xs text-muted-foreground mb-1 block">Име на албума *</label>
+              <Input value={albumForm.name} onChange={e => setAlbumForm({ ...albumForm, name: e.target.value })} placeholder="напр. Коледен базар 2024" /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Slug (URL)</label>
+              <Input value={albumForm.slug} onChange={e => setAlbumForm({ ...albumForm, slug: e.target.value })} placeholder="auto-generated" /></div>
+            <div className="sm:col-span-2"><label className="text-xs text-muted-foreground mb-1 block">Описание</label>
+              <Input value={albumForm.description} onChange={e => setAlbumForm({ ...albumForm, description: e.target.value })} /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">SEO заглавие</label>
+              <Input value={albumForm.seo_title} onChange={e => setAlbumForm({ ...albumForm, seo_title: e.target.value })} /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">SEO описание</label>
+              <Input value={albumForm.seo_description} onChange={e => setAlbumForm({ ...albumForm, seo_description: e.target.value })} /></div>
+            <div><label className="text-xs text-muted-foreground mb-1 block">Пореден №</label>
+              <Input type="number" value={albumForm.sort_order} onChange={e => setAlbumForm({ ...albumForm, sort_order: +e.target.value })} /></div>
+          </div>
+          <div className="flex gap-2">
+            <Btn onClick={saveAlbum} disabled={!albumForm.name || saving}><Save className="h-4 w-4" />{saving ? "Запазване..." : "Запази"}</Btn>
+            <Btn onClick={() => setShowAlbumForm(false)} className="bg-secondary text-foreground hover:bg-secondary/80"><X className="h-4 w-4" />Отказ</Btn>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {albums.map(album => (
+          <div key={album.id} className="rounded-xl border bg-card overflow-hidden">
+            {album.cover_url
+              ? <img src={album.cover_url} alt={album.name} className="h-36 w-full object-cover" />
+              : <div className="h-36 bg-accent flex items-center justify-center"><Image className="h-10 w-10 text-muted-foreground/30" /></div>}
+            <div className="p-4">
+              <h3 className="font-semibold">{album.name}</h3>
+              {album.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{album.description}</p>}
+              <div className="mt-3 flex gap-2">
+                <Btn onClick={() => setOpenAlbum(album)}><Image className="h-3.5 w-3.5" />Снимки</Btn>
+                <Btn onClick={() => editAlbum(album)} className="bg-secondary text-foreground hover:bg-secondary/80"><Save className="h-3.5 w-3.5" />Редактирай</Btn>
+                <Btn onClick={() => deleteAlbum(album.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90"><Trash2 className="h-3.5 w-3.5" /></Btn>
+              </div>
             </div>
           </div>
         ))}
+        {albums.length === 0 && <p className="col-span-3 text-sm text-muted-foreground py-8 text-center">Няма създадени албуми. Създайте първия от бутона по-горе.</p>}
       </div>
+    </div>
+  );
+};
+
+// ── FILE MANAGER ──────────────────────────────────────────────
+const FileManagerTab = () => {
+  const [files, setFiles] = useState<{ name: string; url: string; size: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState("");
+  const [copied, setCopied] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const loadFiles = async () => {
+    setLoading(true);
+    const { data } = await supabase.storage.from("documents").list("uploads", { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+    if (data) {
+      const mapped = data.filter(f => f.name !== ".emptyFolderPlaceholder").map(f => {
+        const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(`uploads/${f.name}`);
+        const kb = f.metadata?.size ? Math.round(f.metadata.size / 1024) : 0;
+        return { name: f.name, url: publicUrl, size: kb > 1024 ? `${(kb/1024).toFixed(1)} MB` : `${kb} KB` };
+      });
+      setFiles(mapped);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { loadFiles(); }, []);
+
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = Array.from(e.target.files || []);
+    if (!fileList.length) return;
+    setUploading(true);
+    let done = 0;
+    for (const file of fileList) {
+      setUploadMsg(`Качване ${done + 1}/${fileList.length}...`);
+      const name = `uploads/${Date.now()}-${sanitizeFileName(file.name)}`;
+      await supabase.storage.from("documents").upload(name, file, { upsert: false });
+      done++;
+    }
+    setUploadMsg(`✓ ${done} файла качени!`);
+    setUploading(false);
+    loadFiles();
+  };
+
+  const copy = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopied(url);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const deleteFile = async (name: string) => {
+    if (!confirm("Изтриване на файла?")) return;
+    await supabase.storage.from("documents").remove([`uploads/${name}`]);
+    loadFiles();
+  };
+
+  const ext = (name: string) => name.split(".").pop()?.toUpperCase() || "FILE";
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-card p-5 space-y-3">
+        <h3 className="font-semibold">Качване на файлове</h3>
+        <p className="text-sm text-muted-foreground">Качете файл и копирайте линка за използване навсякъде в сайта.</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className={`inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground cursor-pointer hover:bg-primary/90 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+            <Upload className="h-4 w-4" />{uploading ? uploadMsg : "Избери файлове"}
+            <input type="file" multiple className="hidden" onChange={upload} disabled={uploading} />
+          </label>
+          {uploadMsg && !uploading && <p className="text-xs text-green-600">{uploadMsg}</p>}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><div className="h-6 w-6 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">{files.length} файла</p>
+          {files.map(f => (
+            <div key={f.name} className="flex items-center gap-3 rounded-xl border bg-card p-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <span className="text-xs font-bold text-primary">{ext(f.name)}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{f.name.replace(/^\d+-/, "")}</p>
+                <p className="text-xs text-muted-foreground">{f.size}</p>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <button onClick={() => copy(f.url)}
+                  className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors">
+                  {copied === f.url ? <><Check className="h-3 w-3 text-green-600" />Копирано</> : <><Copy className="h-3 w-3" />Копирай линк</>}
+                </button>
+                <a href={f.url} target="_blank" rel="noopener noreferrer"
+                  className="rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors">Преглед</a>
+                <button onClick={() => deleteFile(f.name)}
+                  className="rounded-lg border px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            </div>
+          ))}
+          {files.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Няма качени файлове.</p>}
+        </div>
+      )}
     </div>
   );
 };
@@ -897,6 +1140,7 @@ const navItems: { id: Section; label: string; icon: React.ElementType }[] = [
   { id: "board", label: "УС — Членове", icon: Users },
   { id: "board_history", label: "УС — История", icon: Clock },
   { id: "documents", label: "Документи", icon: FileText },
+  { id: "files", label: "Файлове", icon: FolderOpen },
   { id: "stats", label: "Статистики", icon: BarChart2 },
   { id: "gallery", label: "Галерия", icon: Image },
   { id: "donation", label: "Дарения", icon: Heart },
@@ -921,6 +1165,7 @@ const AdminDashboard = () => {
       case "board": return <BoardTab />;
       case "board_history": return <BoardHistoryTab />;
       case "documents": return <DocumentsTab />;
+      case "files": return <FileManagerTab />;
       case "stats": return <StatsTab />;
       case "gallery": return <GalleryTab />;
       case "donation": return <DonationTab />;
