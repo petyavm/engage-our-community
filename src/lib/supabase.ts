@@ -25,6 +25,9 @@ export type NewsItem = {
   full_text?: string;
   published?: boolean;
   created_at?: string;
+  seo_title?: string;
+  seo_description?: string;
+  author?: string;
 };
 
 export type BoardMember = {
