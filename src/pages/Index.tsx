@@ -6,7 +6,6 @@ import ImpactSection from "@/components/ImpactSection";
 import BoardSection from "@/components/BoardSection";
 import DocumentsSection from "@/components/DocumentsSection";
 import DonationSection from "@/components/DonationSection";
-import JoinSection from "@/components/JoinSection";
 import GallerySection from "@/components/GallerySection";
 import SiteFooter from "@/components/SiteFooter";
 
