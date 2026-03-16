@@ -27,9 +27,9 @@ const BoardSection = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-6 max-w-5xl mx-auto">
+        <div className="flex flex-wrap justify-center gap-6 mx-auto">
           {boardMembers.map((member) => (
-            <Card key={member.id} className="text-center w-full sm:w-[calc(50%-12px)] lg:w-[calc(33.333%-16px)]">
+            <Card key={member.id} className="text-center w-full sm:w-[calc(50%-12px)] lg:flex-1 lg:min-w-0">
               <CardContent className="pt-6 flex flex-col items-center gap-4">
                 <Avatar className="h-24 w-24">
                   <AvatarImage src={member.image_url} alt={member.name} />
