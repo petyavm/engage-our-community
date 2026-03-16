@@ -21,7 +21,6 @@ const Index = () => {
         <BoardSection />
         <DocumentsSection />
         <DonationSection />
-        <JoinSection />
         <GallerySection />
       </main>
       <SiteFooter />
